@@ -1,0 +1,473 @@
+---
+title: "Team Valuation Project"
+author: "Terrick Boire"
+date: "2023-05-19"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(caret)
+library(stats)
+library(ggplot2)
+library(corrplot)
+library(dplyr)
+```
+
+
+# Loading the Data into R
+
+```{r}
+franchise.data <- read.csv("franchise values.csv")
+franchise.data
+```
+
+
+
+### DATA CLEANING
+
+# Checking the dimensions
+
+```{r}
+dim(franchise.data)
+```
+# Checking the structure of the data frame
+
+```{r}
+str(franchise.data)
+```
+
+# Dealing with Charaters that should be ints by year to not lose data
+
+
+```{r}
+franchise.2023 <- franchise.data %>%
+  filter(Year == "2023")
+
+franchise.2023
+```
+
+# Removing ",s" and making numeric
+
+```{r}
+franchise.2023$Revenue <- as.numeric(gsub(",","",franchise.2023$Revenue))
+
+franchise.2023$Value <- as.numeric(gsub(",","",franchise.2023$Value))
+
+franchise.2023$Year.over.Year.Value.Increase <- as.numeric(gsub(",","",franchise.2023$Year.over.Year.Value.Increase))
+
+franchise.2023$Debt.Value <- as.numeric(gsub(",","",franchise.2023$Debt.Value))
+
+franchise.2023$Income <- as.numeric(gsub(",","",franchise.2023$Income))
+
+franchise.2023$Population <- as.numeric(gsub(",","",franchise.2023$Population))
+
+franchise.2023
+```
+
+
+
+# Franchise values for 2021
+
+```{r}
+franchise.2021  <- franchise.data %>%
+  filter(Year == "2021")
+  
+franchise.2021
+```
+
+# Removing the % symbol from data
+
+```{r}
+franchise.2021$Year.over.Year.Value.Increase <- gsub( "%", "", as.character(franchise.2021$Year.over.Year.Value.Increase))
+
+franchise.2021$Debt.Value <- gsub( "%", "", as.character(franchise.2021$Debt.Value))
+
+franchise.2021
+```
+
+# Removing ",s" from data and making numeric
+
+```{r}
+franchise.2021$Revenue <- as.numeric(gsub(",","",franchise.2021$Revenue))
+
+franchise.2021$Value <- as.numeric(gsub(",","",franchise.2021$Value))
+
+franchise.2021$Year.over.Year.Value.Increase <- as.numeric(gsub(",","",franchise.2021$Year.over.Year.Value.Increase))
+
+franchise.2021$Debt.Value <- as.numeric(gsub(",","",franchise.2021$Debt.Value))
+
+franchise.2021$Income <- as.numeric(gsub(",","",franchise.2021$Income))
+
+franchise.2021$Population <- as.numeric(gsub(",","",franchise.2021$Population))
+
+franchise.2021
+```
+
+
+# Converting data to reflect original % value
+```{r}
+franchise.2021$Year.over.Year.Value.Increase <- franchise.2021$Year.over.Year.Value.Increase / 100
+
+franchise.2021
+```
+
+
+# Converting data to reflect original 5 value
+```{r}
+franchise.2021$Debt.Value <- franchise.2021$Debt.Value / 100
+
+franchise.2021
+```
+
+# Franchise values for 2020
+
+
+```{r}
+franchise.2020  <- franchise.data %>%
+  filter(Year == "2020")
+  
+franchise.2020
+```
+
+# Removing ",s" from 2020 data and making numeric
+
+```{r}
+franchise.2020$Revenue <- as.numeric(gsub(",","",franchise.2020$Revenue))
+
+franchise.2020$Value <- as.numeric(gsub(",","",franchise.2020$Value))
+
+franchise.2020$Year.over.Year.Value.Increase <- as.numeric(gsub(",","",franchise.2020$Year.over.Year.Value.Increase))
+
+franchise.2020$Debt.Value <- as.numeric(gsub(",","",franchise.2020$Debt.Value))
+
+franchise.2020$Income <- as.numeric(gsub(",","",franchise.2020$Income))
+
+franchise.2020$Population <- as.numeric(gsub(",","",franchise.2020$Population))
+
+franchise.2020
+```
+
+
+# Removing MLS data so that datasets are of equal length
+
+```{r}
+franchise.2020 <- franchise.2020 %>%
+  filter(League != "MLS")
+
+franchise.2020
+```
+
+
+
+# Adding population data for 2021 based on 2020 data
+
+```{r}
+franchise.2021$Population <- ifelse(franchise.2021$Team == franchise.2020$Team, franchise.2020$Population, 0)
+
+franchise.2021
+```
+
+
+# Adding populations based on 2021 information for 2023
+
+```{r}
+franchise.2023 <- franchise.2023 %>% 
+  mutate(Population = ifelse(Team %in% franchise.2021$Team, 
+                           franchise.2021$Population[Team == franchise.2021$Team],0))
+
+franchise.2023
+```
+
+
+# Adding population for 2023 data for new teams or teams with name changes
+
+# Adding population for cle guardians formerly cle indians
+```{r}
+franchise.2023[8, "Population"] <- 2055612
+
+franchise.2023
+```
+
+# Adding population for Wash Commanders previously wash football team
+
+```{r}
+franchise.2023[91, "Population"] <- 6131977
+
+franchise.2023
+```
+
+# Adding population for new team seattle kraken (got population from google)
+
+```{r}
+franchise.2023[116, "Population"] <- 733919
+
+franchise.2023
+```
+
+# Putting 0 in for year over year value, income, and debt value since it is the first year (For all 2020 data)
+
+
+```{r}
+franchise.2020 <- franchise.2020 %>% 
+  mutate(Year.over.Year.Value.Increase = ifelse(is.na(Year.over.Year.Value.Increase), 0, Year.over.Year.Value.Increase),
+                    Debt.Value = ifelse(is.na(Debt.Value), 0, Debt.Value),
+                    Income = ifelse(is.na(Income), 0, Income))
+
+franchise.2020
+```
+
+
+# Adding income for the 1 na remaining for 2021 calgary flames. Got income from https://www.statista.com/statistics/374824/calgary-flames-operating-income/
+
+```{r}
+franchise.2021[97, "Income"] <- -39000000
+
+franchise.2021
+```
+
+# Replacing the unknow Yankees 2023 debt value with the 2021 debt value
+
+```{r}
+franchise.2023[19, "Debt.Value"] <- 0
+
+franchise.2023
+```
+
+
+
+# Putting the cleaned data back together
+
+```{r}
+
+franchise.data <- bind_rows(franchise.2023, franchise.2021, franchise.2020)
+```
+
+
+
+```{r}
+sum(is.na(franchise.data))
+```
+
+
+# Getting a summary of the data
+
+```{r}
+summary(franchise.data)
+```
+
+# Finding the correlation between all numeric variables
+
+```{r}
+cor_franchise <- franchise.data %>%
+  select_if(is.numeric)
+
+c <- round(cor(cor_franchise), digits = 2)
+c
+```
+# Viewing the correlation plot of the variables
+
+```{r}
+corrplot(c)
+
+```
+# Seeing the variables with high correlation
+
+```{r}
+highCorr <- findCorrelation(c, cutoff = 0.5, names = TRUE)
+highCorr
+```
+
+
+
+# Comparing Value and revenue from the  MLB to NBA
+
+# Filtering the data to only use MLB and NBA data
+```{r}
+MLB <- franchise.data %>% 
+  filter(League == "MLB") 
+
+NBA <- franchise.data%>%
+  filter(League == "NBA" )
+```
+
+
+# Combining MLB and NBA data
+```{r}
+mlb_nba <- bind_rows(MLB,NBA)
+```
+
+# Creating the scatterplot
+```{r}
+ggplot(mlb_nba, aes(x = Revenue, y = Value, color = League))+
+  geom_point()+
+  facet_wrap(~League)+
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_x_continuous(labels = scales::dollar_format())+
+  scale_y_continuous(labels = scales::dollar_format())
+```
+
+
+
+# Creating a boxplot to compare mlb and nba revenue and value
+
+```{r}
+ggplot(mlb_nba, aes(x = Revenue, y = Value, color = League))+
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_x_continuous(labels = scales::dollar_format())+
+  scale_y_continuous(labels = scales::dollar_format())
+```
+
+
+
+
+# Value revenue MLB to NHL
+# Filtering the data to only use MLB and NBA data
+```{r}
+NHL <- franchise.data%>%
+  filter(League == "NHL" )
+
+
+```
+
+# Combining MLB and NHL Data
+```{r}
+mlb_nhl <- bind_rows(MLB, NHL)
+```
+
+
+# Creating a Scatterplot
+```{r}
+ggplot(mlb_nhl, aes(x = Revenue, y = Value, color = League))+
+  geom_point()+
+  facet_wrap(~League)+
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_x_continuous(labels = scales::dollar_format())+
+  scale_y_continuous(labels = scales::dollar_format())
+```
+
+# Creating a boxplot to compare mlb and nhl revenue and value
+
+```{r}
+ggplot(mlb_nhl, aes(x = Revenue, y = Value, color = League))+
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_x_continuous(labels = scales::dollar_format())+
+  scale_y_continuous(labels = scales::dollar_format())
+```
+
+
+
+
+# Comparing the 2021 Seasons to other Seasons
+
+# Filtering the data by year
+```{r}
+Season_21 <- franchise.data %>% 
+  filter(Year == 2021) 
+
+Season_23 <- franchise.data%>%
+  filter(Year ==  2023)
+
+Season_20 <- franchise.data%>%
+  filter(Year == 2020)
+```
+
+```{r}
+ggplot(franchise.data, aes(x = Revenue, y = Income, color = League))+
+  geom_boxplot()+
+  facet_wrap(~Year)+
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  scale_x_continuous(labels = scales::dollar_format())+
+  scale_y_continuous(labels = scales::dollar_format())
+```
+
+
+# Creating a regression model to predic the future value
+
+```{r}
+fit <- lm(Value ~ Revenue + Income + Year.over.Year.Value.Increase, data = franchise.data)
+fit_sum <- summary(fit)
+
+```
+
+
+```{r}
+plot(fit)
+```
+
+
+# Making new data set To look at predicted values easier
+
+```{r}
+Predicted_regression <- bind_cols(franchise.data$Team, franchise.data$League, franchise.data$Year, franchise.data$Value, fit$fitted.values)
+
+Predicted_regression
+```
+
+
+# Creating a Second Model (Regression Tree)
+
+
+
+```{r}
+library(tree)
+```
+
+
+```{r}
+na.omit(franchise.data)
+
+set.seed (1)
+training <- sample (1: nrow (franchise.data), nrow (franchise.data) / 2)
+tree.Values <- tree (Value ~ ., franchise.data , subset = training)
+summary (tree.Values)
+
+```
+
+
+```{r}
+plot (tree.Values)
+text (tree.Values , pretty = 0)
+```
+
+
+# Pruning the tree to get better results
+
+```{r}
+prune.Values <- prune.tree (tree.Values , best = 5)
+plot (prune.Values)
+text (prune.Values , pretty = 0)
+```
+
+
+
+```{r}
+yhat <- predict (tree.Values , newdata = franchise.data[-training , ])
+Values.test <- franchise.data[-training , "Value"]
+plot (yhat , Values.test)
+abline (0, 1)
+mean ((yhat - Values.test)^2)
+```
+
+
+# Predictind values from the tree
+```{r}
+yhat_predicted <- predict(tree.Values, newdata = franchise.data)
+```
+
+
+
+```{r}
+Predicted_tree <- bind_cols(franchise.data$Team, franchise.data$League, franchise.data$Year, franchise.data$Value, yhat_predicted)
+Predicted_tree
+```
+
+

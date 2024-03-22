@@ -1,0 +1,324 @@
+---
+title: "OBS Projection"
+author: "Terrick Boire"
+date: "2023-06-05"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For this project we had to predict what player`s on base percentage would be after two months on playing. In a previous class we had to use predictive analytics to analyze a data set. So based off of that experience my thought process was to follow the steps I took in that project while also exploring a could of new models from the ones I previously used in this class.Some of the new models I took a look at included a regression tree, random forest, boosting as well as bagging. A small amount of data cleaning was need in order to make this data set usable.
+
+To measure my accuracy I thought using mean square error was the best method. When it comes to mean square error you want it to be as close to zero as possible. As I began and finished my analysis I found that my models were getting more accurate. The most accurate model was the boosted model which gave me an MSE of nearly 0. All of the models did do really well according to MSE as they were all nearly 0. Of the four models the regression tree did the worst with a MSE of 0.0005516988. The random forest and bagging methods amost had the same MSE. The MSE for the random forest was 0.0001405223 and for the bagging model it was 0.0001342595. The best method was the boosting method and that had an MSE extremly close to 0 and it was 2.812912e-28, which is significantly lower that the other observed MSEs. Below you can find my code as well as graphs used to help me analyze and predict the data.
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(caret)
+library(stats)
+library(ggplot2)
+library(corrplot)
+library(dplyr)
+```
+# Used https://hastie.su.domains/ISLR2/ISLRv2_website.pdf textbook for reference when coding
+
+# Loading the data
+
+```{r}
+batting <- read.csv("batting.csv")
+```
+
+
+# checking the data for NAs
+
+```{r}
+sum(is.na(batting))
+```
+# Cleaning the Data
+# Removing the percent symbol from the data
+
+```{r}
+batting$MarApr_BB. <- gsub( "%", "", as.character(batting$MarApr_BB.))
+
+batting$MarApr_K. <- gsub( "%", "", as.character(batting$MarApr_K.))
+
+batting$MarApr_LD. <- gsub( "%", "", as.character(batting$MarApr_LD.))
+
+batting$MarApr_GB. <- gsub( "%", "", as.character(batting$MarApr_GB.))
+
+batting$MarApr_FB. <- gsub( "%", "", as.character(batting$MarApr_FB.))
+
+batting$MarApr_IFFB. <- gsub( "%", "", as.character(batting$MarApr_IFFB.))
+
+batting$MarApr_HR.FB <- gsub( "%", "", as.character(batting$MarApr_HR.FB))
+
+batting$MarApr_Swing. <- gsub( "%", "", as.character(batting$MarApr_Swing.))
+
+batting$MarApr_O.Swing. <- gsub( "%", "", as.character(batting$MarApr_O.Swing.))
+
+batting$MarApr_Z.Swing. <- gsub( "%", "", as.character(batting$MarApr_Z.Swing.))
+
+batting$MarApr_Contact. <- gsub( "%", "", as.character(batting$MarApr_Contact.))
+
+batting$MarApr_O.Contact. <- gsub( "%", "", as.character(batting$MarApr_O.Contact.))
+
+
+batting$MarApr_Z.Contact. <- gsub( "%", "", as.character(batting$MarApr_Z.Contact.))
+
+view(batting)
+```
+
+
+# Converting the percent values to their actual values
+
+```{r}
+batting$MarApr_BB. <- as.numeric(batting$MarApr_BB.)
+
+batting$MarApr_K. <- as.numeric(batting$MarApr_K.)
+
+batting$MarApr_LD. <- as.numeric(batting$MarApr_LD.)
+
+batting$MarApr_GB. <- as.numeric(batting$MarApr_GB.)
+
+batting$MarApr_FB. <- as.numeric(batting$MarApr_FB.)
+
+batting$MarApr_IFFB. <- as.numeric(batting$MarApr_IFFB.)
+
+batting$MarApr_HR.FB <- as.numeric(batting$MarApr_HR.FB)
+
+batting$MarApr_Swing. <- as.numeric(batting$MarApr_Swing.)
+
+batting$MarApr_O.Swing. <- as.numeric(batting$MarApr_O.Swing.)
+
+batting$MarApr_Z.Swing. <- as.numeric(batting$MarApr_Z.Swing.)
+
+batting$MarApr_Contact. <- as.numeric(batting$MarApr_Contact.)
+
+batting$MarApr_O.Contact. <- as.numeric(batting$MarApr_O.Contact.)
+
+batting$MarApr_Z.Contact. <- as.numeric(batting$MarApr_Z.Contact.)
+
+#view(batting)
+```
+
+```{r}
+batting$MarApr_BB. <- batting$MarApr_BB. / 100
+
+batting$MarApr_K. <- batting$MarApr_K. / 100
+
+batting$MarApr_LD. <- batting$MarApr_LD. / 100
+
+batting$MarApr_GB. <- batting$MarApr_GB. / 100
+
+batting$MarApr_FB. <- batting$MarApr_FB. / 100
+
+batting$MarApr_IFFB. <- batting$MarApr_IFFB. / 100
+
+batting$MarApr_HR.FB <- batting$MarApr_HR.FB / 100
+
+batting$MarApr_Swing. <- batting$MarApr_Swing. / 100
+
+batting$MarApr_O.Swing. <- batting$MarApr_O.Swing. / 100
+
+batting$MarApr_Z.Swing. <- batting$MarApr_Z.Swing. / 100
+
+batting$MarApr_Contact. <- batting$MarApr_Contact. / 100
+
+batting$MarApr_O.Contact. <- batting$MarApr_O.Contact. / 100
+
+batting$MarApr_Z.Contact. <- batting$MarApr_Z.Contact. / 100
+
+#view(batting)
+
+```
+
+
+# Checking for NAs
+
+```{r}
+sum(is.na(batting))
+```
+
+
+# Seeing which variables are highly correlated to full season OBP
+
+```{r}
+b <- batting%>%
+  select_if(is.numeric)
+```
+
+
+```{r}
+batting_cor<- cor(b)
+```
+
+```{r}
+corrplot::corrplot(batting_cor)
+```
+
+# Creating a training dataset in order to run regression and making a regression tree
+
+```{r}
+library(tree)
+set.seed (1)
+
+train <- batting
+
+tree.batting <- tree (FullSeason_OBP ~ ., batting )
+summary (tree.batting)
+
+
+```
+
+```{r}
+plot (tree.batting)
+text (tree.batting , pretty = 0)
+
+```
+
+
+# Pruning the tree
+
+```{r}
+cv.batting <- cv.tree(tree.batting)
+plot(cv.batting$size , cv.batting$dev, type = "b")
+```
+
+
+```{r}
+prune.batting <- prune.tree (tree.batting , best = 5)
+plot(prune.batting)
+text(prune.batting , pretty = 0)
+```
+
+
+# Making predictions on the based on the tree
+
+```{r}
+yhat <- predict (tree.batting , newdata = batting)
+
+batting.test <- batting[ , "FullSeason_OBP"]
+
+plot (yhat , batting.test)
+
+abline (0, 1)
+
+mean ((yhat - batting.test)^2)
+```
+
+
+
+# Creating a random forests
+```{r}
+library (randomForest)
+
+set.seed (1)
+
+bag.batting <- randomForest(FullSeason_OBP~., data = batting, mtry = 10, importance = TRUE)
+
+bag.batting
+
+```
+
+
+# Predicting values from bagging as well as finding MSE
+
+```{r}
+yhat.bag <- predict (bag.batting , newdata = batting)
+
+plot (yhat.bag , batting.test)
+
+abline (0, 1)
+
+mean ((yhat.bag - batting.test)^2)
+```
+
+# Predicting values from the random forest as well as MSE
+
+```{r}
+set.seed (1)
+
+rf.batting <- randomForest (FullSeason_OBP ~ ., data = batting, mtry = 5, importance = TRUE)
+
+yhat.rf <- predict (rf.batting, newdata = batting)
+
+mean ((yhat.rf - batting.test)^2)
+```
+
+
+# Checking the importance of each variable
+
+```{r}
+importance(rf.batting)
+```
+
+# Plotting the importance
+
+```{r}
+varImpPlot(rf.batting)
+```
+
+# Boosting to see if I can get more accurate results
+
+# Removing non numeric variables for boosting
+```{r}
+batting_boost <- batting[-c(1:3)]
+```
+
+
+```{r}
+library (gbm)
+set.seed (1)
+
+boost.batting <- gbm (FullSeason_OBP ~ ., data = batting_boost,
+distribution = "gaussian", n.trees = 5000,
+interaction.depth = 4, shrinkage = 0.2, verbose = F)
+```
+
+
+```{r}
+summary(boost.batting)
+```
+
+#predicting values for boosting as well as finding MSE
+```{r}
+yhat.boost <- predict (boost.batting , newdata = batting, n.trees = 5000)
+
+mean ((yhat.boost - batting.test)^2)
+```
+
+# Creating a dataset for the actual and predicted vaules
+
+```{r}
+Accuracy <- bind_cols(batting$FullSeason_OBP,yhat, yhat.rf, yhat.bag)
+```
+
+# Renaming the columns code from https://sparkbyexamples.com/r-programming/rename-column-in-r/
+
+```{r}
+colnames(Accuracy)[1] = "FullSeason_OBP"
+colnames(Accuracy)[2] = "Tree_Prediction"
+colnames(Accuracy)[3] = "RandomForest_Prediction"
+colnames(Accuracy)[4] = "Bagging_Prediction"
+```
+
+
+
+
+
+
+
+
+
+
+`
+
+
+
+
+
+

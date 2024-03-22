@@ -1,0 +1,285 @@
+---
+title: "Project 2"
+author: "Terrick Boire"
+date: "2023-05-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+heart <- read.csv("Heart.csv")
+
+heart <- na.omit(heart)
+```
+
+
+```{r}
+attach(heart)
+```
+
+
+
+```{r}
+heart <- heart[,-1]
+```
+
+```{r}
+heart <- heart[ ,-2:-8]
+```
+
+
+```{r}
+heart[ ,2:7]<- scale(heart[ ,2:7])
+heart 
+```
+
+
+```{r}
+#heart$TenYearCHD <- ifelse(heart$TenYearCHD == 0, "No", "Yes")
+
+```
+
+
+### LOGISTIC REGRESSION
+
+```{r}
+train <- (age < 45)
+heart.45 <- heart[!train, ]
+dim(heart.45)
+```
+
+
+```{r}
+TenYearCHD.45 <- TenYearCHD[!train]
+```
+
+
+```{r}
+glm.fits <- glm(TenYearCHD ~ totChol + sysBP + diaBP + BMI + heartRate + glucose, data = heart, family = binomial, subset = train)
+
+glm.probs <- predict(glm.fits, heart.45, type = "response")
+```
+
+
+```{r}
+summary(glm.fits)
+```
+
+
+
+
+```{r}
+glm.pred <- rep(0, 2424)
+
+glm.pred[glm.probs > .5] <- 1
+
+table(glm.pred, TenYearCHD.45)
+```
+
+```{r}
+mean(glm.pred == TenYearCHD.45)
+```
+
+```{r}
+mean(glm.pred == !TenYearCHD.45)
+```
+
+
+
+### LDA
+
+
+```{r}
+library(MASS)
+lda.fit <- lda(TenYearCHD ~ totChol + glucose, data = heart,
+    subset = train)
+lda.fit
+```
+
+```{r}
+plot(lda.fit)
+```
+
+
+
+
+```{r}
+lda.pred <- predict (lda.fit , heart.45)
+names (lda.pred)
+
+
+lda.class <- lda.pred$class
+table (lda.class, TenYearCHD.45)
+
+```
+
+```{r}
+mean(lda.class == TenYearCHD.45)
+```
+
+
+
+
+
+
+### QDA
+
+
+```{r}
+qda.fit <- qda(TenYearCHD ~ totChol + glucose, data = heart,
+    subset = train)
+qda.fit
+```
+```{r}
+qda.class <- predict (qda.fit , heart.45)$class
+table (qda.class , TenYearCHD.45)
+```
+
+
+```{r}
+mean (qda.class == TenYearCHD.45)
+
+```
+
+
+
+
+
+### KNN
+
+```{r}
+library(class)
+
+train.X <- cbind(totChol, glucose)[train, ]
+
+test.X <- cbind(totChol, glucose)[!train, ]
+
+train.TenYearCHD <- TenYearCHD[train]
+```
+
+
+```{r}
+set.seed(1)
+
+knn.pred <- knn(train.X, test.X, train.TenYearCHD, k = 1
+                )
+table(knn.pred, TenYearCHD.45)
+```
+
+
+```{r}
+knn.pred <- knn(train.X, test.X, train.TenYearCHD, k = 3)
+
+table(knn.pred, TenYearCHD.45)
+```
+
+
+```{r}
+mean(knn.pred == TenYearCHD.45)
+```
+
+
+
+```{r}
+standardized.X <- scale(heart[ , -8])
+
+```
+
+
+```{r}
+var(standardized.X[,1])
+```
+
+```{r}
+test <- 1:750
+
+train.X <- standardized.X[-test, ]
+
+test.X <- standardized.X[test, ]
+
+train.Y <- TenYearCHD[-test]
+
+test.Y <- TenYearCHD[test]
+```
+
+
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.Y, k = 1)
+mean(test.Y != knn.pred)
+```
+
+```{r}
+mean(test.Y != 0)
+```
+
+
+
+```{r}
+set.seed(1)
+knn.pred <- knn(train.X, test.X, train.Y, k = 3)
+mean(test.Y != knn.pred)
+```
+
+### CLASSIFICATION TREE
+
+
+```{r}
+library(tree)
+
+High <- factor(ifelse(age <= 45, "No", "Yes"))
+
+heart <- data.frame(heart, High)
+```
+
+
+```{r}
+tree.heart <- tree(High ~ . - age, heart)
+```
+
+
+```{r}
+summary(tree.heart)
+```
+
+
+```{r}
+plot(tree.heart)
+text(tree.heart, pretty = 0)
+
+```
+
+```{r}
+set.seed(1)
+
+train <- sample(1:nrow(heart), 1828)
+
+heart.test <- heart[-train, ]
+
+High.test <- High[-train]
+
+tree.heart <- tree(High ~ . - age, heart,
+    subset = train)
+
+tree.pred <- predict(tree.heart, heart.test, type = "class")
+
+table(tree.pred, High.test)
+```
+
+
+
+
+
+```{r}
+library(randomForest)
+set.seed(1)
+rf.heart <- randomForest(TenYearCHD ~ ., data = heart, subset = train, mtry = 6, importance = TRUE)
+yhat.rf <- predict(rf.heart, newdata = heart[-train, ])
+
+mean((yhat.rf - heart.test)^2)
+```
+
